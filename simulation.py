@@ -1,19 +1,7 @@
 import streamlit as st
 import pandas as pd
 import time
-import joblib
-
-# import your heuristic
-from placement_optimization import pick_best_machine  
-
-# ------------------------
-# Load trained LightGBM model
-# ------------------------
-@st.cache_resource
-def load_model():
-    return joblib.load("lightgbm_sla_model.pkl")
-
-model = load_model()
+import numpy as np
 
 # ------------------------
 # Preset machine templates
@@ -32,7 +20,7 @@ PRESETS = {
 }
 
 # ------------------------
-# Machine class
+# Helper classes
 # ------------------------
 class Machine:
     def __init__(self, specs, name):
@@ -42,7 +30,9 @@ class Machine:
         self.tasks = []  # list of (task, finish_time)
 
     def is_free(self, current_time):
+        # Free up finished tasks
         self.tasks = [(t, ft) for (t, ft) in self.tasks if ft > current_time]
+        # If no task is running, it’s free
         return len(self.tasks) == 0
 
     def allocate(self, task, current_time):
@@ -55,10 +45,59 @@ class Machine:
         self.free_resources["ram_total_gb"] -= task["req_ram_gb"]
 
     def release(self, task):
+        # restore resources
         self.free_resources["cpu_cores_total"] += task["req_cpu_cores"]
         self.free_resources["gpu_cores_total"] += task["req_gpu_cores"]
         self.free_resources["gpu_vram_total_gb"] += task["req_gpu_vram_gb"]
         self.free_resources["ram_total_gb"] += task["req_ram_gb"]
+
+# ------------------------
+# Multi-objective optimizer
+# ------------------------
+def score_machine(machine, task):
+    # Energy = CPU watts * fraction + GPU watts * fraction
+    frac_cpu = task["req_cpu_cores"] / (machine.specs["cpu_cores_total"] + 1e-6)
+    frac_gpu = task["req_gpu_cores"] / (machine.specs["gpu_cores_total"] + 1e-6) if machine.specs["gpu_cores_total"] else 0
+    frac_ram = task["req_ram_gb"] / (machine.specs["ram_total_gb"] + 1e-6)
+
+    energy = frac_cpu * machine.specs["cpu_watts"] + frac_gpu * machine.specs["gpu_watts"]
+
+    # Fit penalty
+    diffs = []
+    reqs = {"cpu_cores_total": "req_cpu_cores", "gpu_cores_total": "req_gpu_cores", "gpu_vram_total_gb": "req_gpu_vram_gb", "ram_total_gb": "req_ram_gb"}
+    for res in ["cpu_cores_total", "gpu_cores_total", "gpu_vram_total_gb", "ram_total_gb"]:
+        avail = machine.free_resources[res] + 1e-6
+        req = task[reqs[res]]
+        if req == 0: 
+            continue
+        diffs.append(((req/avail) - 1) ** 2)
+    fit_penalty = np.mean(diffs) if diffs else 0
+
+    return energy, fit_penalty
+
+def pick_best_machine(machines, task, alpha=0.5):
+    scored = []
+    energies, fits = [], []
+    for m in machines:
+        e, f = score_machine(m, task)
+        scored.append((m, e, f))
+        energies.append(e)
+        fits.append(f)
+
+    if not scored:
+        return None
+
+    # normalize
+    e_min, e_max = min(energies), max(energies)
+    f_min, f_max = min(fits), max(fits)
+    results = []
+    for m, e, f in scored:
+        e_norm = (e - e_min) / (e_max - e_min + 1e-6)
+        f_norm = (f - f_min) / (f_max - f_min + 1e-6)
+        score = alpha * (1 - e_norm) + (1 - alpha) * (1 - f_norm)
+        results.append((m, score))
+    results.sort(key=lambda x: x[1], reverse=True)
+    return results[0][0]
 
 # ------------------------
 # Streamlit app
@@ -106,46 +145,23 @@ if workload_file:
         current_time = 0
         for i, task in tasks.iterrows():
             st.write(f"### Scheduling Task {i+1}")
-
-            # Step 1: free machines
             free_machines = [m for m in st.session_state.machines if m.is_free(current_time)]
 
             if not free_machines:
                 st.error("No free machine available right now. Task queued.")
             else:
-                # Step 2: predict SLA violation for each free machine
-                safe_machines = []
-                for m in free_machines:
-                    features = pd.DataFrame([{
-                        "cpu_cores_total": m.free_resources["cpu_cores_total"],
-                        "cpu_watts": m.specs["cpu_watts"],
-                        "gpu_cores_total": m.free_resources["gpu_cores_total"],
-                        "gpu_vram_total_gb": m.free_resources["gpu_vram_total_gb"],
-                        "gpu_watts": m.specs["gpu_watts"],
-                        "ram_total_gb": m.free_resources["ram_total_gb"],
-                        "cpu_cores_used": m.specs["cpu_cores_total"] - m.free_resources["cpu_cores_total"],
-                        "gpu_cores_used": m.specs["gpu_cores_total"] - m.free_resources["gpu_cores_total"],
-                        "gpu_vram_used_gb": m.specs["gpu_vram_total_gb"] - m.free_resources["gpu_vram_total_gb"],
-                        "ram_used_gb": m.specs["ram_total_gb"] - m.free_resources["ram_total_gb"],
-                        "current_cpu_power_w": 0,  # stub, can be estimated
-                        "current_gpu_power_w": 0,  # stub, can be estimated
-                        "req_cpu_cores": task["req_cpu_cores"],
-                        "req_gpu_cores": task["req_gpu_cores"],
-                        "req_gpu_vram_gb": task["req_gpu_vram_gb"],
-                        "req_ram_gb": task["req_ram_gb"],
-                    }])
-                    pred = model.predict(features)[0]
-                    if pred < 0.5:  # no SLA violation
-                        safe_machines.append(m)
+                # Step 1: (binary classifier stub — for now assume all free machines are SLA safe)
+                safe_machines = free_machines
 
-                # Step 3: pick best machine with heuristic
-                if safe_machines:
-                    chosen = pick_best_machine(safe_machines, task, alpha=0.5)
-                    if chosen:
-                        chosen.allocate(task, current_time)
-                        st.success(f"Task {i+1} placed on {chosen.name}")
+                # Step 2: optimizer
+                chosen = pick_best_machine(safe_machines, task, alpha=0.5)
+
+                if chosen:
+                    chosen.allocate(task, current_time)
+                    st.success(f"Task {i+1} placed on {chosen.name}")
                 else:
-                    st.error("No SLA-safe machine found for task.")
+                    st.error("No suitable machine found for task.")
 
+            # simulate wait
             time.sleep(5)
             current_time += 5
