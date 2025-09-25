@@ -682,25 +682,46 @@ with col_w2:
             st.success(f"Generated {num_tasks} sample tasks")
             st.dataframe(tasks_df, use_container_width=True)
 
-# Real-time Simulation
-st.session_state.simulation_results = []
-st.session_state.current_time = 0
-st.session_state.simulation_running = False
-for machine in st.session_state.machines:
-    machine.tasks = []
-    machine.free_resources = machine.specs.copy()
-    machine.utilization_history = []
-    machine.energy_consumed = 0
-    machine.total_cost = 0
-    machine.sla_violations = 0
+# Real-time Simulation - FIXED VERSION
+st.header("🚀 Real-Time Simulation")
+
+# Check conditions and provide helpful messages
+has_tasks = 'tasksdf' in st.session_state and len(st.session_state.get('tasksdf', [])) > 0
+has_machines = len(st.session_state.machines) > 0
+
+# Show status
+col_status1, col_status2 = st.columns(2)
+with col_status1:
+    if has_tasks:
+        st.success(f"✅ Tasks ready: {len(st.session_state['tasksdf'])} tasks loaded")
+    else:
+        st.warning("⚠️ No tasks loaded. Upload CSV or generate sample workload above.")
+
+with col_status2:
+    if has_machines:
+        st.success(f"✅ Machines ready: {len(st.session_state.machines)} machines available")
+    else:
+        st.warning("⚠️ No machines available. Add machines in the Machine Pool section above.")
+
+# Always show the simulation controls, but disable the button if conditions aren't met
+col_sim1, col_sim2 = st.columns([1, 1])
+
+with col_sim1:
+    # Determine if button should be disabled
+    button_disabled = st.session_state.simulation_running or not has_tasks or not has_machines
     
-if 'tasksdf' in st.session_state and len(st.session_state.machines) > 0:
-    st.header("🚀 Real-Time Simulation")
-    
-    col_sim1, col_sim2 = st.columns([1, 1])
-    
-    with col_sim1:
-        if st.button("▶️ Start Real-Time Simulation", use_container_width=True, type="primary", disabled=st.session_state.simulation_running):
+    # Create the button with appropriate state
+    if st.button("▶️ Start Real-Time Simulation", 
+                use_container_width=True, 
+                type="primary", 
+                disabled=button_disabled):
+        
+        if not has_tasks:
+            st.error("❌ Cannot start simulation: No tasks available. Please upload a CSV or generate sample tasks.")
+        elif not has_machines:
+            st.error("❌ Cannot start simulation: No machines available. Please add machines to the pool.")
+        else:
+            # Start simulation - your existing simulation code here
             st.session_state.simulation_running = True
             st.session_state.simulation_results = []
             
@@ -850,21 +871,30 @@ if 'tasksdf' in st.session_state and len(st.session_state.machines) > 0:
                 current_task_info.success("All tasks processed!")
                 
             st.session_state.simulation_running = False
-    
-    with col_sim2:
-        if st.button("⏹️ Reset Simulation", use_container_width=True):
-            st.session_state.simulation_results = []
-            st.session_state.current_time = 0
-            st.session_state.simulation_running = False
-            for machine in st.session_state.machines:
-                machine.tasks = []
-                machine.free_resources = machine.specs.copy()
-                machine.utilization_history = []
-                machine.energy_consumed = 0
-                machine.total_cost = 0
-                machine.sla_violations = 0
-            st.success("Simulation reset successfully!")
-            update_dashboard()
+
+    # Show button status
+    if button_disabled and not st.session_state.simulation_running:
+        if not has_tasks and not has_machines:
+            st.caption("⚠️ Button disabled: Need both tasks and machines")
+        elif not has_tasks:
+            st.caption("⚠️ Button disabled: Need tasks (upload CSV or generate sample)")
+        elif not has_machines:
+            st.caption("⚠️ Button disabled: Need machines (add to machine pool)")
+
+with col_sim2:
+    if st.button("⏹️ Reset Simulation", use_container_width=True):
+        st.session_state.simulation_results = []
+        st.session_state.current_time = 0
+        st.session_state.simulation_running = False
+        for machine in st.session_state.machines:
+            machine.tasks = []
+            machine.free_resources = machine.specs.copy()
+            machine.utilization_history = []
+            machine.energy_consumed = 0
+            machine.total_cost = 0
+            machine.sla_violations = 0
+        st.success("Simulation reset successfully!")
+        update_dashboard()
 
 # Live Results Section
 if st.session_state.simulation_results:
