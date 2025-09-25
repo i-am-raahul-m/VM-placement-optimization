@@ -124,6 +124,29 @@ def load_models():
         models['MLP'] = pt
     except Exception:
         models['MLP'] = None
+    # GradientBoost Classifier
+    try:
+        models['GradBoost'] = joblib.load("gradBoost_classifier.pkl")
+    except Exception:
+        models['GradBoost'] = None
+    # Ridge Classifier
+    try:
+        models['Ridge'] = joblib.load("ridge_classifier.pkl")
+    except Exception:
+        models['Ridge'] = None
+    # SGD Classifier
+    try:
+        models['SGD'] = joblib.load("sgd_classifier.pkl")
+    except Exception:
+        models['SGD'] = None
+    # TabNet Classifier
+    try:
+        from pytorch_tabnet.tab_model import TabNetClassifier
+        tn = TabNetClassifier()
+        tn.load_model("tabnet_classifier.zip")
+        models['TabNet'] = tn
+    except Exception:
+        models['TabNet'] = None
     return models
 
 def predict_sla_violation(model, model_type, features_df):
@@ -170,6 +193,18 @@ def predict_sla_violation(model, model_type, features_df):
                 tensor_input = torch.FloatTensor(features_df.values)
                 preds = model(tensor_input).squeeze().numpy()
                 return np.asarray(preds).reshape(-1)
+        if model_type in ['GradBoost', 'Ridge', 'SGD']:
+            if hasattr(model, "predict_proba"):
+                proba = model.predict_proba(features_df)
+                return proba[:, 1] if proba.ndim == 2 and proba.shape[1] > 1 else proba.reshape(-1)
+            else:
+                preds = model.decision_function(features_df)
+                return 1 / (1 + np.exp(-preds))  # sigmoid conversion
+        if model_type == 'TabNet':
+            import numpy as np
+            X = features_df.values
+            preds = model.predict_proba(X)[:, 1]
+            return np.asarray(preds).reshape(-1)
         return np.random.uniform(0, 0.4, len(features_df))
     except Exception as e:
         st.warning(f"Error in {model_type} prediction: {str(e)}")
