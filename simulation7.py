@@ -68,7 +68,6 @@ def load_models():
     except Exception:
         models['CatBoost'] = None
     try:
-        import torch
         tt_path = "tabtransformer_numeric.pt"
         if Path(tt_path).exists():
             ckpt = torch.load(tt_path, map_location="cpu", weights_only=False)
@@ -139,7 +138,17 @@ def load_models():
         models['SGD'] = joblib.load("sgd_classifier.pkl")
     except Exception:
         models['SGD'] = None
+    try:
+        models['RandomForest'] = joblib.load("random_forest_sla_model.pkl")
+    except Exception:
+        models['RandomForest'] = None
+    # AdaBoost
+    try:
+        models['AdaBoost'] = joblib.load("adaboost_sla_model.pkl")
+    except Exception:
+        models['AdaBoost'] = None
     # TabNet Classifier
+
     try:
         from pytorch_tabnet.tab_model import TabNetClassifier
         tn = TabNetClassifier()
@@ -184,7 +193,6 @@ def predict_sla_violation(model, model_type, features_df):
             p = cb.predict_proba(X)[:, 1]
             return sigmoid(logit(p)/T)
         if model_type == 'TabTransformer':
-            import torch
             tt = model["model"]
             feats = model["features"]
             mean = np.asarray(model["mean"], dtype="float32")
@@ -208,9 +216,20 @@ def predict_sla_violation(model, model_type, features_df):
                 preds = model.decision_function(features_df)
                 return 1 / (1 + np.exp(-preds))  # sigmoid conversion
         if model_type == 'TabNet':
-            import numpy as np
             X = features_df.values
             preds = model.predict_proba(X)[:, 1]
+            return np.asarray(preds).reshape(-1)
+        if model_type == 'RandomForest':
+            if hasattr(model, "predict_proba"):
+                proba = model.predict_proba(features_df)
+                return proba[:, 1] if proba.shape[1] > 1 else proba.reshape(-1)
+            preds = model.predict(features_df)
+            return np.asarray(preds).reshape(-1)
+        if model_type == 'AdaBoost':
+            if hasattr(model, "predict_proba"):
+                proba = model.predict_proba(features_df)
+                return proba[:, 1] if proba.shape[1] > 1 else proba.reshape(-1)
+            preds = model.predict(features_df)
             return np.asarray(preds).reshape(-1)
         return np.random.uniform(0, 0.4, len(features_df))
     except Exception as e:
