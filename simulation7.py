@@ -134,11 +134,6 @@ def load_models():
         models['GradBoost'] = joblib.load("gradBoost_classifier.pkl")
     except Exception:
         models['GradBoost'] = None
-    # Ridge Classifier
-    try:
-        models['Ridge'] = joblib.load("ridge_classifier.pkl")
-    except Exception:
-        models['Ridge'] = None
     # SGD Classifier
     try:
         models['SGD'] = joblib.load("sgd_classifier.pkl")
@@ -214,13 +209,13 @@ def predict_sla_violation(model, model_type, features_df):
                 tensor_input = torch.FloatTensor(features_df.values)
                 preds = model(tensor_input).squeeze().numpy()
                 return np.asarray(preds).reshape(-1)
-        if model_type in ['GradBoost', 'Ridge', 'SGD']:
+        if model_type in ['GradBoost', 'SGD']:
             if hasattr(model, "predict_proba"):
                 proba = model.predict_proba(features_df)
-                return proba[:, 1] if proba.ndim == 2 and proba.shape[1] > 1 else proba.reshape(-1)
+                return separate(proba[:, 1] if proba.ndim == 2 and proba.shape[1] > 1 else proba.reshape(-1))
             else:
                 preds = model.decision_function(features_df)
-                return 1 / (1 + np.exp(-preds))
+                return separate(1 / (1 + np.exp(-preds)))
         if model_type == 'TabNet':
             X = features_df.values
             preds = model.predict_proba(X)[:, 1]
