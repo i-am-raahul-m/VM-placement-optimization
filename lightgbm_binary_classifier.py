@@ -1,151 +1,56 @@
-import streamlit as st
 import pandas as pd
-import time
-import joblib
+import lightgbm as lgb
+from lightgbm import early_stopping, log_evaluation
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
-# import your heuristic
-from placement_optimization import pick_best_machine  
+# Train -- X: features, y: target
+X_train = pd.read_csv("model_features_train.csv")
+y_train = pd.read_csv("model_labels_train.csv")
 
-# ------------------------
-# Load trained LightGBM model
-# ------------------------
-@st.cache_resource
-def load_model():
-    return joblib.load("lightgbm_sla_model.pkl")
+# Test -- X: features, y: target
+X_test = pd.read_csv("model_features_test.csv")
+y_test = pd.read_csv("model_labels_test.csv")
 
-model = load_model()
+# LightGBM dataset
+train_data = lgb.Dataset(X_train, label=y_train)
+test_data = lgb.Dataset(X_test, label=y_test, reference=train_data)
 
-# ------------------------
-# Preset machine templates
-# ------------------------
-PRESETS = {
-    "Small VM": {"cpu_cores_total": 4, "gpu_cores_total": 0, "gpu_vram_total_gb": 0, "ram_total_gb": 8,
-                 "cpu_watts": 65, "gpu_watts": 0},
-    "GPU Node": {"cpu_cores_total": 8, "gpu_cores_total": 2048, "gpu_vram_total_gb": 16, "ram_total_gb": 32,
-                 "cpu_watts": 95, "gpu_watts": 250},
-    "Balanced": {"cpu_cores_total": 16, "gpu_cores_total": 1024, "gpu_vram_total_gb": 8, "ram_total_gb": 64,
-                 "cpu_watts": 120, "gpu_watts": 150},
-    "High RAM": {"cpu_cores_total": 8, "gpu_cores_total": 0, "gpu_vram_total_gb": 0, "ram_total_gb": 128,
-                 "cpu_watts": 85, "gpu_watts": 0},
-    "Beast": {"cpu_cores_total": 32, "gpu_cores_total": 4096, "gpu_vram_total_gb": 48, "ram_total_gb": 256,
-              "cpu_watts": 200, "gpu_watts": 400},
+# Parameters for binary classification
+params = {
+    "objective": "binary",
+    "metric": "binary_logloss",
+    "boosting_type": "gbdt",
+    "learning_rate": 0.05,
+    "num_leaves": 31,
+    "feature_fraction": 0.9,
+    "bagging_fraction": 0.8,
+    "bagging_freq": 5,
+    "verbose": -1,
 }
 
-# ------------------------
-# Machine class
-# ------------------------
-class Machine:
-    def __init__(self, specs, name):
-        self.name = name
-        self.specs = specs.copy()
-        self.free_resources = specs.copy()
-        self.tasks = []  # list of (task, finish_time)
+# Train model
+model = lgb.train(
+    params,
+    train_data,
+    valid_sets=[train_data, test_data],
+    num_boost_round=1000,
+    callbacks=[
+        early_stopping(stopping_rounds=50),
+        log_evaluation(50)
+    ]
+)
 
-    def is_free(self, current_time):
-        self.tasks = [(t, ft) for (t, ft) in self.tasks if ft > current_time]
-        return len(self.tasks) == 0
+# Predictions
+y_pred_proba = model.predict(X_test, num_iteration=model.best_iteration)
+y_pred = (y_pred_proba > 0.5).astype(int)
 
-    def allocate(self, task, current_time):
-        finish_time = current_time + task["execution_time"]
-        self.tasks.append((task, finish_time))
-        # reduce resources
-        self.free_resources["cpu_cores_total"] -= task["req_cpu_cores"]
-        self.free_resources["gpu_cores_total"] -= task["req_gpu_cores"]
-        self.free_resources["gpu_vram_total_gb"] -= task["req_gpu_vram_gb"]
-        self.free_resources["ram_total_gb"] -= task["req_ram_gb"]
+# Evaluation
+print("Accuracy:", accuracy_score(y_test, y_pred))
+print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+print("Classification Report:\n", classification_report(y_test, y_pred))
 
-    def release(self, task):
-        self.free_resources["cpu_cores_total"] += task["req_cpu_cores"]
-        self.free_resources["gpu_cores_total"] += task["req_gpu_cores"]
-        self.free_resources["gpu_vram_total_gb"] += task["req_gpu_vram_gb"]
-        self.free_resources["ram_total_gb"] += task["req_ram_gb"]
+# Save model
+model.save_model("lightgbm_sla_model.txt")
 
-# ------------------------
-# Streamlit app
-# ------------------------
-st.title("VM Placement Simulator")
-
-# Machine pool
-if "machines" not in st.session_state:
-    st.session_state.machines = []
-
-st.header("Add Machines")
-preset = st.selectbox("Choose preset", list(PRESETS.keys()))
-if st.button("Add Preset Machine"):
-    idx = len(st.session_state.machines) + 1
-    st.session_state.machines.append(Machine(PRESETS[preset], f"{preset}-{idx}"))
-
-st.subheader("Or Add Custom Machine")
-with st.form("custom_form"):
-    cpu = st.number_input("CPU cores", 1, 128, 8)
-    gpu = st.number_input("GPU cores", 0, 8192, 0)
-    vram = st.number_input("GPU VRAM (GB)", 0, 128, 0)
-    ram = st.number_input("RAM (GB)", 1, 512, 16)
-    cpu_w = st.number_input("CPU Watts", 1, 400, 95)
-    gpu_w = st.number_input("GPU Watts", 0, 600, 0)
-    submitted = st.form_submit_button("Add Custom Machine")
-    if submitted:
-        spec = {"cpu_cores_total": cpu, "gpu_cores_total": gpu, "gpu_vram_total_gb": vram,
-                "ram_total_gb": ram, "cpu_watts": cpu_w, "gpu_watts": gpu_w}
-        idx = len(st.session_state.machines) + 1
-        st.session_state.machines.append(Machine(spec, f"Custom-{idx}"))
-
-st.write("### Current Pool")
-for m in st.session_state.machines:
-    st.json({"name": m.name, **m.specs})
-
-# Workload
-st.header("Load Workload CSV")
-workload_file = st.file_uploader("Upload CSV", type="csv")
-
-if workload_file:
-    tasks = pd.read_csv(workload_file)
-    st.dataframe(tasks)
-
-    if st.button("Start Simulation"):
-        current_time = 0
-        for i, task in tasks.iterrows():
-            st.write(f"### Scheduling Task {i+1}")
-
-            # Step 1: free machines
-            free_machines = [m for m in st.session_state.machines if m.is_free(current_time)]
-
-            if not free_machines:
-                st.error("No free machine available right now. Task queued.")
-            else:
-                # Step 2: predict SLA violation for each free machine
-                safe_machines = []
-                for m in free_machines:
-                    features = pd.DataFrame([{
-                        "cpu_cores_total": m.free_resources["cpu_cores_total"],
-                        "cpu_watts": m.specs["cpu_watts"],
-                        "gpu_cores_total": m.free_resources["gpu_cores_total"],
-                        "gpu_vram_total_gb": m.free_resources["gpu_vram_total_gb"],
-                        "gpu_watts": m.specs["gpu_watts"],
-                        "ram_total_gb": m.free_resources["ram_total_gb"],
-                        "cpu_cores_used": m.specs["cpu_cores_total"] - m.free_resources["cpu_cores_total"],
-                        "gpu_cores_used": m.specs["gpu_cores_total"] - m.free_resources["gpu_cores_total"],
-                        "gpu_vram_used_gb": m.specs["gpu_vram_total_gb"] - m.free_resources["gpu_vram_total_gb"],
-                        "ram_used_gb": m.specs["ram_total_gb"] - m.free_resources["ram_total_gb"],
-                        "current_cpu_power_w": 0,  # stub, can be estimated
-                        "current_gpu_power_w": 0,  # stub, can be estimated
-                        "req_cpu_cores": task["req_cpu_cores"],
-                        "req_gpu_cores": task["req_gpu_cores"],
-                        "req_gpu_vram_gb": task["req_gpu_vram_gb"],
-                        "req_ram_gb": task["req_ram_gb"],
-                    }])
-                    pred = model.predict(features)[0]
-                    if pred < 0.5:  # no SLA violation
-                        safe_machines.append(m)
-
-                # Step 3: pick best machine with heuristic
-                if safe_machines:
-                    chosen = pick_best_machine(safe_machines, task, alpha=0.5)
-                    if chosen:
-                        chosen.allocate(task, current_time)
-                        st.success(f"Task {i+1} placed on {chosen.name}")
-                else:
-                    st.error("No SLA-safe machine found for task.")
-
-            time.sleep(5)
-            current_time += 5
+# Load later if needed:
+# loaded_model = lgb.Booster(model_file="lightgbm_sla_model.txt")
