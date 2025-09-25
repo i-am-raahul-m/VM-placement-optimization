@@ -582,7 +582,7 @@ with col2:
     else:
         st.info("No machines added yet. Add some machines to get started!")
 
-# Workload Management
+# Workload Management - FIXED VERSION
 st.header("📋 Workload Management")
 col_w1, col_w2 = st.columns([1, 1])
 
@@ -591,19 +591,68 @@ with col_w1:
     workload_file = st.file_uploader("Choose CSV file", type="csv")
     
     if workload_file:
-        tasks_df = pd.read_csv(workload_file)
-        st.dataframe(tasks_df.head(), use_container_width=True)
-        
-        if len(tasks_df) > 0:
-            col_s1, col_s2, col_s3 = st.columns(3)
-            with col_s1:
-                st.metric("Total Tasks", len(tasks_df))
-            with col_s2:
-                avg_cpu = tasks_df.get("req_cpu_cores", [0]).mean()
-                st.metric("Avg CPU Req", f"{avg_cpu:.1f}")
-            with col_s3:
-                avg_ram = tasks_df.get("req_ram_gb", [0]).mean()
-                st.metric("Avg RAM Req", f"{avg_ram:.1f} GB")
+        try:
+            uploaded_df = pd.read_csv(workload_file)
+            st.dataframe(uploaded_df.head(), use_container_width=True)
+            
+            # Define task-specific columns (what we expect from the workload)
+            TASK_COLUMNS = [
+                'req_cpu_cores', 'req_gpu_cores', 'req_gpu_vram_gb', 'req_ram_gb', 'execution_time'
+            ]
+            
+            # Check which required task columns are present
+            available_task_cols = [col for col in TASK_COLUMNS if col in uploaded_df.columns]
+            missing_task_cols = [col for col in TASK_COLUMNS if col not in uploaded_df.columns]
+            
+            if len(available_task_cols) >= 4:  # At least CPU, RAM, and execution time required
+                # Extract only task-specific columns and clean the data
+                task_df = uploaded_df[available_task_cols].copy()
+                
+                # Fill missing values with defaults
+                for col in TASK_COLUMNS:
+                    if col not in task_df.columns:
+                        if col == 'execution_time':
+                            task_df[col] = 30.0  # Default 30 seconds
+                        else:
+                            task_df[col] = 0  # Default 0 for resource requirements
+                
+                # Ensure all values are numeric and positive
+                for col in TASK_COLUMNS:
+                    task_df[col] = pd.to_numeric(task_df[col], errors='coerce').fillna(0)
+                    task_df[col] = task_df[col].abs()  # Ensure positive values
+                
+                # Store in session state
+                st.session_state['tasksdf'] = task_df
+                
+                st.success(f"✅ Successfully loaded {len(task_df)} tasks!")
+                
+                # Show summary
+                col_s1, col_s2, col_s3 = st.columns(3)
+                with col_s1:
+                    st.metric("Total Tasks", len(task_df))
+                with col_s2:
+                    avg_cpu = task_df["req_cpu_cores"].mean()
+                    st.metric("Avg CPU Req", f"{avg_cpu:.1f}")
+                with col_s3:
+                    avg_ram = task_df["req_ram_gb"].mean()
+                    st.metric("Avg RAM Req", f"{avg_ram:.1f} GB")
+                
+                # Show what columns were used
+                st.info(f"📋 **Task columns used**: {', '.join(available_task_cols)}")
+                if missing_task_cols:
+                    st.warning(f"⚠️ **Missing columns** (using defaults): {', '.join(missing_task_cols)}")
+                
+                # Show preview of processed data
+                st.subheader("Processed Task Data")
+                st.dataframe(task_df.head(), use_container_width=True)
+                
+            else:
+                st.error(f"❌ **Invalid CSV format**\n\nRequired columns: {', '.join(TASK_COLUMNS[:4])}\n\nFound: {', '.join(available_task_cols) if available_task_cols else 'None'}")
+                st.info("💡 **CSV should contain task requirements only**. Machine data comes from the Machine Pool.")
+                
+        except Exception as e:
+            st.error(f"❌ Error reading CSV: {str(e)}")
+            st.info("💡 Make sure your CSV has columns like: req_cpu_cores, req_ram_gb, execution_time")
 
 with col_w2:
     st.subheader("Or Generate Sample Workload")
@@ -615,12 +664,6 @@ with col_w2:
             np.random.seed(42)
             
             sample_tasks = []
-            cpu_cores_total = 24
-            cpu_watts = 95
-            gpu_cores_total = 8192
-            gpu_vram_total_gb = 16
-            gpu_watts = 200
-            ram_total_gb = 256
             for i in range(num_tasks):
                 if task_complexity == "Light":
                     cpu_range, ram_range, gpu_range = (1, 4), (1, 8), (0, 0)
@@ -629,52 +672,14 @@ with col_w2:
                 else:  # Heavy
                     cpu_range, ram_range, gpu_range = (4, 16), (8, 64), (0, 2048)
 
-                # Requested resources
-                req_cpu = np.random.randint(cpu_range[0], cpu_range[1] + 1)
-                req_gpu = np.random.randint(gpu_range[0], gpu_range[1] + 1)
-                req_gpu_vram = np.random.randint(0, 16) if gpu_range[1] > 0 else 0
-                req_ram = np.random.randint(ram_range[0], ram_range[1] + 1)
-                exec_time = np.random.uniform(5, 60)  # seconds
-
-                # Simulated usage (just proportional to request for now)
-                cpu_used = req_cpu * np.random.uniform(0.6, 0.95)
-                gpu_used = min(req_gpu, gpu_cores_total) * np.random.uniform(0.5, 0.9)
-                gpu_vram_used = min(req_gpu_vram, gpu_vram_total_gb) * np.random.uniform(0.5, 0.95)
-                ram_used = min(req_ram, ram_total_gb) * np.random.uniform(0.6, 0.95)
-
-                # Power consumption (simple proportional scaling)
-                current_cpu_power_w = (cpu_used / cpu_cores_total) * cpu_watts
-                current_gpu_power_w = (gpu_used / gpu_cores_total) * gpu_watts
-
-                # SLA violation (1 if any requirement > available capacity)
-                sla_violation = int(
-                    req_cpu > cpu_cores_total or
-                    req_gpu > gpu_cores_total or
-                    req_gpu_vram > gpu_vram_total_gb or
-                    req_ram > ram_total_gb
-                )
-
+                # Generate ONLY task-specific data (requirements)
                 task = {
-                    "cpu_cores_total": cpu_cores_total,
-                    "cpu_watts": cpu_watts,
-                    "gpu_cores_total": gpu_cores_total,
-                    "gpu_vram_total_gb": gpu_vram_total_gb,
-                    "gpu_watts": gpu_watts,
-                    "ram_total_gb": ram_total_gb,
-                    "cpu_cores_used": round(cpu_used, 2),
-                    "gpu_cores_used": round(gpu_used, 2),
-                    "gpu_vram_used_gb": round(gpu_vram_used, 2),
-                    "ram_used_gb": round(ram_used, 2),
-                    "current_cpu_power_w": round(current_cpu_power_w, 2),
-                    "current_gpu_power_w": round(current_gpu_power_w, 2),
-                    "req_cpu_cores": req_cpu,
-                    "req_gpu_cores": req_gpu,
-                    "req_gpu_vram_gb": req_gpu_vram,
-                    "req_ram_gb": req_ram,
-                    "execution_time": round(exec_time, 2),
-                    "sla_violation": sla_violation
+                    "req_cpu_cores": np.random.randint(cpu_range[0], cpu_range[1] + 1),
+                    "req_gpu_cores": np.random.randint(gpu_range[0], gpu_range[1] + 1),
+                    "req_gpu_vram_gb": np.random.randint(0, 16) if gpu_range[1] > 0 else 0,
+                    "req_ram_gb": np.random.randint(ram_range[0], ram_range[1] + 1),
+                    "execution_time": round(np.random.uniform(5, 60), 2)
                 }
-
                 sample_tasks.append(task)
             
             tasks_df = pd.DataFrame(sample_tasks)
@@ -682,7 +687,18 @@ with col_w2:
             st.success(f"Generated {num_tasks} sample tasks")
             st.dataframe(tasks_df, use_container_width=True)
 
-# Real-time Simulation - FIXED VERSION
+# Real-time Simulation - UPDATED VERSION
+st.session_state.simulation_results = []
+st.session_state.current_time = 0
+st.session_state.simulation_running = False
+for machine in st.session_state.machines:
+    machine.tasks = []
+    machine.free_resources = machine.specs.copy()
+    machine.utilization_history = []
+    machine.energy_consumed = 0
+    machine.total_cost = 0
+    machine.sla_violations = 0
+    
 st.header("🚀 Real-Time Simulation")
 
 # Check conditions and provide helpful messages
@@ -721,7 +737,7 @@ with col_sim1:
         elif not has_machines:
             st.error("❌ Cannot start simulation: No machines available. Please add machines to the pool.")
         else:
-            # Start simulation - your existing simulation code here
+            # Start simulation with proper data separation
             st.session_state.simulation_running = True
             st.session_state.simulation_results = []
             
@@ -778,24 +794,28 @@ with col_sim1:
                         time.sleep(0.5 / simulation_speed)
                         continue
                     
-                    # SLA prediction for each capable machine using selected model
+                    # SLA prediction using machine data + task requirements
                     sla_safe_machines = []
                     sla_predictions = {}
                     
                     for machine in capable_machines:
+                        # CRITICAL: Combine machine specs with task requirements for SLA prediction
                         features = pd.DataFrame([{
+                            # Machine specifications (from machine pool)
                             "cpu_cores_total": machine.specs["cpu_cores_total"],
                             "cpu_watts": machine.specs["cpu_watts"],
                             "gpu_cores_total": machine.specs["gpu_cores_total"],
                             "gpu_vram_total_gb": machine.specs["gpu_vram_total_gb"],
                             "gpu_watts": machine.specs["gpu_watts"],
                             "ram_total_gb": machine.specs["ram_total_gb"],
+                            # Current machine usage (from machine state)
                             "cpu_cores_used": machine.specs["cpu_cores_total"] - machine.free_resources["cpu_cores_total"],
                             "gpu_cores_used": machine.specs["gpu_cores_total"] - machine.free_resources["gpu_cores_total"],
                             "gpu_vram_used_gb": machine.specs["gpu_vram_total_gb"] - machine.free_resources["gpu_vram_total_gb"],
                             "ram_used_gb": machine.specs["ram_total_gb"] - machine.free_resources["ram_total_gb"],
-                            "current_cpu_power_w": 50.0,
-                            "current_gpu_power_w": 100.0,
+                            "current_cpu_power_w": 50.0,  # Estimated current power
+                            "current_gpu_power_w": 100.0, # Estimated current power
+                            # Task requirements (from task dataset)
                             "req_cpu_cores": task.get("req_cpu_cores", 0),
                             "req_gpu_cores": task.get("req_gpu_cores", 0),
                             "req_gpu_vram_gb": task.get("req_gpu_vram_gb", 0),
