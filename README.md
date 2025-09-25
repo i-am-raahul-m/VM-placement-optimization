@@ -3,7 +3,14 @@
 A **Streamlit-powered dashboard** to simulate workloads, predict SLA violations, and optimize machine usage using a variety of **Machine Learning models**.
 
 ---
+## 👥 Team Members
 
+- **Tarun Srikumar** — 23BCE1032  
+- **Derrick Richard** — 23BCE1040  
+- **Ram Sundar Radhakrishnan** — 23BCE1939  
+- **Raahul M** — 23BCE5106
+
+---
 ## 🚀 Overview
 
 This dashboard allows users to:
