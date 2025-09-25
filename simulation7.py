@@ -12,6 +12,12 @@ import torch
 import torch.nn as nn
 from pathlib import Path
 
+def separate(num):
+    if num < 0.5:
+        return 0
+    else:
+        return 1
+
 # ------------------------
 # Load multiple models
 # ------------------------
@@ -214,7 +220,7 @@ def predict_sla_violation(model, model_type, features_df):
                 return proba[:, 1] if proba.ndim == 2 and proba.shape[1] > 1 else proba.reshape(-1)
             else:
                 preds = model.decision_function(features_df)
-                return 1 / (1 + np.exp(-preds))  # sigmoid conversion
+                return 1 / (1 + np.exp(-preds))
         if model_type == 'TabNet':
             X = features_df.values
             preds = model.predict_proba(X)[:, 1]
@@ -999,7 +1005,7 @@ with col_sim1:
                                 "task_id": i+1,
                                 "status": "✅ Scheduled",
                                 "machine": chosen_machine.name,
-                                "sla_prediction": f"{sla_predictions[chosen_machine.name]:.3f}",
+                                "sla_prediction": f"{separate(sla_predictions[chosen_machine.name])}",
                                 "energy_score": f"{energy_score:.3f}",
                                 "fit_score": f"{fit_score:.3f}",
                                 "model_used": selected_model
