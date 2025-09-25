@@ -161,8 +161,15 @@ def predict_sla_violation(model, model_type, features_df):
             preds = model.predict(features_df.values)
             return np.asarray(preds).reshape(-1)
         if model_type == 'XGBoost':
+            FEATURE_ORDER = [
+                "cpu_cores_total","cpu_watts","gpu_cores_total","gpu_vram_total_gb",
+                "gpu_watts","ram_total_gb","cpu_cores_used","gpu_cores_used",
+                "gpu_vram_used_gb","ram_used_gb","current_cpu_power_w","current_gpu_power_w",
+                "req_cpu_cores","req_gpu_cores","req_gpu_vram_gb","req_ram_gb"
+            ]
             import xgboost as xgb
-            dmatrix = xgb.DMatrix(features_df.values)
+            features_df = features_df[FEATURE_ORDER]
+            dmatrix = xgb.DMatrix(features_df.values, feature_names=FEATURE_ORDER)
             preds = model.predict(dmatrix)
             return np.asarray(preds).reshape(-1)
         if model_type == 'CatBoost':
