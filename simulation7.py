@@ -165,7 +165,7 @@ def predict_sla_violation(model, model_type, features_df):
                 logits = tt(torch.as_tensor(X))
                 p = torch.sigmoid(logits).cpu().numpy().reshape(-1)
             return p
-        if model_type == 'PyTorch':
+        if model_type == 'MLP':
             with torch.no_grad():
                 tensor_input = torch.FloatTensor(features_df.values)
                 preds = model(tensor_input).squeeze().numpy()
