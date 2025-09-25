@@ -1,0 +1,23 @@
+{
+  "feature_cols": [
+    "cpu_cores_total",
+    "cpu_watts",
+    "gpu_cores_total",
+    "gpu_vram_total_gb",
+    "gpu_watts",
+    "ram_total_gb",
+    "cpu_cores_used",
+    "gpu_cores_used",
+    "gpu_vram_used_gb",
+    "ram_used_gb",
+    "current_cpu_power_w",
+    "current_gpu_power_w",
+    "req_cpu_cores",
+    "req_gpu_cores",
+    "req_gpu_vram_gb",
+    "req_ram_gb"
+  ],
+  "threshold": 0.59,
+  "recall_target": 0.9,
+  "temperature": 0.9
+}
