@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import json
 import torch
 import torch.nn as nn
+from pathlib import Path
 
 # ------------------------
 # Load multiple models
@@ -34,74 +35,142 @@ class SLA_NN(nn.Module):
 @st.cache_resource
 def load_models():
     models = {}
-    
-    # Load LightGBM model
     try:
         models['LightGBM'] = joblib.load("lightgbm_sla_model.pkl")
     except FileNotFoundError:
         try:
             import lightgbm as lgb
             models['LightGBM'] = lgb.Booster(model_file="lightgbm_sla_model.txt")
-        except:
+        except Exception:
             models['LightGBM'] = None
-    except:
+    except Exception:
         models['LightGBM'] = None
-    
-    # Load XGBoost model
     try:
         import xgboost as xgb
-        models['XGBoost'] = xgb.Booster()
-        models['XGBoost'].load_model("xgboost_sla_model.json")
-    except:
+        xb = xgb.Booster()
+        xb.load_model("xgboost_sla_model.json")
+        models['XGBoost'] = xb
+    except Exception:
         models['XGBoost'] = None
-    
-    # Load PyTorch model
-    #try:
-    model = SLA_NN(input_dim=16)
-    model.load_state_dict(torch.load("best_model.pth", map_location='cpu'))
-    model.eval()
-    models['PyTorch'] = model
-    #except:
-        #models['PyTorch'] = None
-    
+    try:
+        from catboost import CatBoostClassifier
+        import os
+        cb_model_path = "catboost_model.cbm"
+        cb_meta_path  = "catboost_meta.json"
+        if os.path.exists(cb_model_path) and os.path.exists(cb_meta_path):
+            with open(cb_meta_path, "r") as f:
+                meta = json.load(f)
+            cb = CatBoostClassifier()
+            cb.load_model(cb_model_path)
+            models['CatBoost'] = {"model": cb, "features": meta.get("feature_cols", []), "tau": float(meta.get("threshold", 0.5)), "temperature": float(meta.get("temperature", 1.0))}
+        else:
+            models['CatBoost'] = None
+    except Exception:
+        models['CatBoost'] = None
+    try:
+        import torch
+        tt_path = "tabtransformer_numeric.pt"
+        if Path(tt_path).exists():
+            ckpt = torch.load(tt_path, map_location="cpu", weights_only=False)
+            feats = ckpt.get("feature_cols") or ckpt.get("features") or ckpt.get("feat_cols")
+            if feats is None:
+                raise KeyError("feature_cols not found in checkpoint")
+            tau   = float(ckpt.get("threshold", 0.5))
+            mean  = np.asarray(ckpt.get("scaler_mean_", ckpt.get("mean")), dtype="float32")
+            scale = np.asarray(ckpt.get("scaler_scale_", ckpt.get("scale")), dtype="float32")
+            arch  = ckpt.get("arch") or {"d_model":64,"nhead":8,"layers":2,"dim_ff":192,"use_cls":True}
+            class NumericTabTransformer(nn.Module):
+                def __init__(self, num_features, d_model, nhead, layers, dim_ff, p=0.0, use_cls=True):
+                    super().__init__()
+                    self.use_cls = use_cls
+                    self.scalar_proj = nn.Linear(1, d_model)
+                    self.col_embed   = nn.Parameter(torch.randn(num_features, d_model)*0.02)
+                    if use_cls:
+                        self.cls_token = nn.Parameter(torch.randn(1,1,d_model)*0.02)
+                        self.cls_pos   = nn.Parameter(torch.randn(1,1,d_model)*0.02)
+                    enc = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead, dim_feedforward=dim_ff, dropout=p, batch_first=True, activation="gelu")
+                    self.encoder = nn.TransformerEncoder(enc, layers)
+                    self.norm = nn.LayerNorm(d_model)
+                    self.head = nn.Sequential(nn.Linear(d_model,d_model), nn.GELU(), nn.Dropout(p), nn.Linear(d_model,1))
+                def forward(self, x):
+                    B, F = x.shape
+                    x = self.scalar_proj(x.unsqueeze(-1))
+                    x = x + self.col_embed.unsqueeze(0).expand(B, -1, -1)
+                    if self.use_cls:
+                        cls = self.cls_token.expand(B,1,-1) + self.cls_pos
+                        x = torch.cat([cls, x], dim=1)
+                    z = self.encoder(x)
+                    pooled = z[:,0,:] if self.use_cls else z.mean(dim=1)
+                    pooled = self.norm(pooled)
+                    return self.head(pooled).squeeze(1)
+            model = NumericTabTransformer(num_features=len(feats), d_model=arch["d_model"], nhead=arch["nhead"], layers=arch["layers"], dim_ff=arch["dim_ff"], p=0.0, use_cls=arch.get("use_cls", True))
+            state = ckpt.get("state_dict") or ckpt.get("model_state_dict") or ckpt
+            if isinstance(state, dict):
+                try:
+                    model.load_state_dict(state, strict=False)
+                except Exception as e:
+                    st.warning(f"Loaded TabTransformer but failed to apply state_dict strictly: {e}")
+            model.eval()
+            models['TabTransformer'] = {"model": model, "features": feats, "tau": tau, "mean": mean, "scale": scale}
+        else:
+            models['TabTransformer'] = None
+    except Exception as e:
+        st.warning(f"TabTransformer load error: {e}")
+        models['TabTransformer'] = None
+    try:
+        pt = SLA_NN(input_dim=16)
+        pt.load_state_dict(torch.load("best_model.pth", map_location='cpu'))
+        pt.eval()
+        models['MLP'] = pt
+    except Exception:
+        models['MLP'] = None
     return models
 
 def predict_sla_violation(model, model_type, features_df):
-    """Unified prediction function for different model types"""
     try:
         if model is None or model_type == 'Mock':
-            # Mock prediction - random but consistent
             np.random.seed(42)
             return np.random.uniform(0, 0.4, len(features_df))
-        
-        elif model_type == 'LightGBM':
-            if hasattr(model, 'predict'):
-                predictions = model.predict(features_df.values)
-                # Ensure binary classification output
-                if isinstance(predictions[0], (int, float)):
-                    return np.array([max(0, min(1, p)) for p in predictions])
-                return predictions
-            elif hasattr(model, 'predict_proba'):
+        if model_type == 'LightGBM':
+            if hasattr(model, 'predict_proba'):
                 proba = model.predict_proba(features_df)
-                return proba[:, 1] if proba.shape[1] > 1 else proba[:, 0]
-        
-        elif model_type == 'XGBoost':
+                return proba[:, 1] if proba.ndim == 2 and proba.shape[1] > 1 else proba.reshape(-1)
+            preds = model.predict(features_df.values)
+            return np.asarray(preds).reshape(-1)
+        if model_type == 'XGBoost':
             import xgboost as xgb
             dmatrix = xgb.DMatrix(features_df.values)
-            predictions = model.predict(dmatrix)
-            return np.array([max(0, min(1, p)) for p in predictions])
-        
-        elif model_type == 'PyTorch':
+            preds = model.predict(dmatrix)
+            return np.asarray(preds).reshape(-1)
+        if model_type == 'CatBoost':
+            cb = model["model"]
+            feats = model["features"]
+            T = float(model.get("temperature", 1.0))
+            def sigmoid(z): return 1/(1+np.exp(-z))
+            def logit(p):
+                p = np.clip(p, 1e-6, 1-1e-6)
+                return np.log(p/(1-p))
+            X = features_df.reindex(columns=feats, fill_value=0.0).values
+            p = cb.predict_proba(X)[:, 1]
+            return sigmoid(logit(p)/T)
+        if model_type == 'TabTransformer':
+            import torch
+            tt = model["model"]
+            feats = model["features"]
+            mean = np.asarray(model["mean"], dtype="float32")
+            scale = np.asarray(model["scale"], dtype="float32")
+            X = features_df.reindex(columns=feats, fill_value=0.0).values.astype("float32")
+            X = (X - mean) / scale
+            with torch.no_grad():
+                logits = tt(torch.as_tensor(X))
+                p = torch.sigmoid(logits).cpu().numpy().reshape(-1)
+            return p
+        if model_type == 'PyTorch':
             with torch.no_grad():
                 tensor_input = torch.FloatTensor(features_df.values)
-                predictions = model(tensor_input).squeeze().numpy()
-                if len(predictions.shape) == 0:  # Single prediction
-                    predictions = np.array([predictions])
-                return predictions
-        
-        else:
-            return np.random.uniform(0, 0.4, len(features_df))
-    
+                preds = model(tensor_input).squeeze().numpy()
+                return np.asarray(preds).reshape(-1)
+        return np.random.uniform(0, 0.4, len(features_df))
     except Exception as e:
         st.warning(f"Error in {model_type} prediction: {str(e)}")
         return np.random.uniform(0, 0.4, len(features_df))
