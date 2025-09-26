@@ -124,7 +124,7 @@ def load_models():
         models['TabTransformer'] = None
     try:
         pt = SLA_NN(input_dim=16)
-        pt.load_state_dict(torch.load("best_model.pth", map_location='cpu'))
+        pt.load_state_dict(torch.load("models/MLP/best_model.pth", map_location='cpu'))
         pt.eval()
         models['MLP'] = pt
     except Exception:
