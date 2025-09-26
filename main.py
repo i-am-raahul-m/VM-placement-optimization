@@ -42,11 +42,11 @@ class SLA_NN(nn.Module):
 def load_models():
     models = {}
     try:
-        models['LightGBM'] = joblib.load("lightgbm_sla_model.pkl")
+        models['LightGBM'] = joblib.load("models/LightGBM/lightgbm_sla_model.pkl")
     except FileNotFoundError:
         try:
             import lightgbm as lgb
-            models['LightGBM'] = lgb.Booster(model_file="lightgbm_sla_model.txt")
+            models['LightGBM'] = lgb.Booster(model_file="models/LightGBM/lightgbm_sla_model.txt")
         except Exception:
             models['LightGBM'] = None
     except Exception:
