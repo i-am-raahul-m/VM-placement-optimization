@@ -145,7 +145,7 @@ def load_models():
         models['RandomForest'] = None
     # AdaBoost
     try:
-        models['AdaBoost'] = joblib.load("adaboost_sla_model.pkl")
+        models['AdaBoost'] = joblib.load("models/AdaBoost/adaboost_sla_tuned.pkl")
     except Exception:
         models['AdaBoost'] = None
     # TabNet Classifier
