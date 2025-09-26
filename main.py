@@ -74,7 +74,7 @@ def load_models():
     except Exception:
         models['CatBoost'] = None
     try:
-        tt_path = "tabtransformer_numeric.pt"
+        tt_path = "models/TabTransformer/tabtransformer_numeric.pt"
         if Path(tt_path).exists():
             ckpt = torch.load(tt_path, map_location="cpu", weights_only=False)
             feats = ckpt.get("feature_cols") or ckpt.get("features") or ckpt.get("feat_cols")
