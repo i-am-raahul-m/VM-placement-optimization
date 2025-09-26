@@ -153,7 +153,7 @@ def load_models():
     try:
         from pytorch_tabnet.tab_model import TabNetClassifier
         tn = TabNetClassifier()
-        tn.load_model("tabnet_classifier_model.zip")
+        tn.load_model("models/TabNet/tabnet_classifier_model.zip")
         models['TabNet'] = tn
     except Exception:
         models['TabNet'] = None
