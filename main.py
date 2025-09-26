@@ -61,8 +61,8 @@ def load_models():
     try:
         from catboost import CatBoostClassifier
         import os
-        cb_model_path = "catboost_model.cbm"
-        cb_meta_path  = "catboost_meta.json"
+        cb_model_path = "models/CatBoost/catboost_model.cbm"
+        cb_meta_path  = "models/CatBoost/catboost_meta.json"
         if os.path.exists(cb_model_path) and os.path.exists(cb_meta_path):
             with open(cb_meta_path, "r") as f:
                 meta = json.load(f)
