@@ -14,7 +14,7 @@ from torch.utils.data import TensorDataset, DataLoader
 # -----------------------
 
 # Train -- X: features, y: target
-X_train = pd.read_csv("model_features_train.csv")
+X_train = pd.read_csv("data/model_features_train.csv")
 y_train = pd.read_csv("model_labels_train.csv")
 
 # Test -- X: features, y: target
