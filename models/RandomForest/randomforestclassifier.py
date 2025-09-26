@@ -10,7 +10,7 @@ y_train = pd.read_csv("model_labels_train.csv").values.ravel()  # flatten in cas
 
 # Load testing data
 X_test = pd.read_csv("data/model_features_test.csv")
-y_test = pd.read_csv("model_labels_test.csv").values.ravel()
+y_test = pd.read_csv("data/model_labels_test.csv").values.ravel()
 
 # -------------------------------
 # Random Forest

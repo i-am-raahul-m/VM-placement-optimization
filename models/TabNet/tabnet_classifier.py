@@ -8,7 +8,7 @@ import numpy as np
 X_train = pd.read_csv("data/model_features_train.csv")
 y_train = pd.read_csv("model_labels_train.csv").values.ravel()
 X_test = pd.read_csv("data/model_features_test.csv")
-y_test = pd.read_csv("model_labels_test.csv").values.ravel()
+y_test = pd.read_csv("data/model_labels_test.csv").values.ravel()
 
 # Convert to NumPy (TabNet requires this)
 X_train_np = X_train.values

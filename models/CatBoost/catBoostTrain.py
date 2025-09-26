@@ -35,7 +35,7 @@ def main():
     ap.add_argument("--train_x",default="data/model_features_train.csv")
     ap.add_argument("--train_y",default="model_labels_train.csv")
     ap.add_argument("--test_x",default="data/model_features_test.csv")
-    ap.add_argument("--test_y",default="model_labels_test.csv")
+    ap.add_argument("--test_y",default="data/model_labels_test.csv")
     ap.add_argument("--outdir",default="./artifacts")
     ap.add_argument("--iterations",type=int,default=8000)
     ap.add_argument("--depth",type=int,default=6)
