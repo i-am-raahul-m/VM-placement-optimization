@@ -140,7 +140,7 @@ def load_models():
     except Exception:
         models['SGD'] = None
     try:
-        models['RandomForest'] = joblib.load("random_forest_sla_model.pkl")
+        models['RandomForest'] = joblib.load("models/RandomForest/random_forest_sla_model.pkl")
     except Exception:
         models['RandomForest'] = None
     # AdaBoost
