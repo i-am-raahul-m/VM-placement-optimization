@@ -129,12 +129,10 @@ def load_models():
         models['MLP'] = pt
     except Exception:
         models['MLP'] = None
-    # GradientBoost Classifier
     try:
         models['GradBoost'] = joblib.load("models/GradientBoost/gradBoost_classifier.pkl")
     except Exception:
         models['GradBoost'] = None
-    # SGD Classifier
     try:
         models['SGD'] = joblib.load("models/SGD/sgd_classifier.pkl")
     except Exception:
@@ -143,13 +141,10 @@ def load_models():
         models['RandomForest'] = joblib.load("models/RandomForest/random_forest_sla_model.pkl")
     except Exception:
         models['RandomForest'] = None
-    # AdaBoost
     try:
         models['AdaBoost'] = joblib.load("models/AdaBoost/adaboost_sla_tuned.pkl")
     except Exception:
         models['AdaBoost'] = None
-    # TabNet Classifier
-
     try:
         from pytorch_tabnet.tab_model import TabNetClassifier
         tn = TabNetClassifier()
