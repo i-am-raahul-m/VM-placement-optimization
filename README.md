@@ -69,7 +69,7 @@ This dashboard allows users to:
 
 ## 🤖 Machine Learning Models
 
-The dashboard integrates and compares multiple models:
+The dashboard integrates and compares 10 models:
 
 | Model                          | Accuracy |
 |--------------------------------|----------|
@@ -80,7 +80,6 @@ The dashboard integrates and compares multiple models:
 | CatBoost                       | 0.921 |
 | GradientBoostingClassifier     | 0.923 |
 | Random Forest                  | 0.8708 |
-| Ridge Classifier               | 0.7748 |
 | TabTransformer                 | 0.792 |
 | AdaBoost                       | 0.7628 |
 | SGD Classifier                 | 0.6486 |
@@ -93,7 +92,7 @@ The dashboard integrates and compares multiple models:
 - **Data Handling**: Pandas, NumPy  
 - **Visualization**: Plotly (Express, Graph Objects, Subplots)  
 - **ML Models**:  
-  - Scikit-learn: Ridge, SGD, Random Forest, GradientBoost, AdaBoost  
+  - Scikit-learn: SGD, Random Forest, GradientBoost, AdaBoost  
   - LightGBM, XGBoost, CatBoost  
   - PyTorch: MLP, TabTransformer, TabNet  
 
