@@ -3,12 +3,12 @@ import xgboost as xgb
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
 # Train -- X: features, y: target
-X_train = pd.read_csv("data/model_features_train.csv")
-y_train = pd.read_csv("data/model_labels_train.csv")
+X_train = pd.read_csv("../../data/model_features_train.csv")
+y_train = pd.read_csv("../../data/model_labels_train.csv")
 
 # Test -- X: features, y: target
-X_test = pd.read_csv("data/model_features_test.csv")
-y_test = pd.read_csv("data/model_labels_test.csv")
+X_test = pd.read_csv("../../data/model_features_test.csv")
+y_test = pd.read_csv("../../data/model_labels_test.csv")
 
 # Convert to DMatrix (optimized data format for XGBoost)
 dtrain = xgb.DMatrix(X_train, label=y_train)

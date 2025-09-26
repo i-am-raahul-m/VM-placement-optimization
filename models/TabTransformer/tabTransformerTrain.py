@@ -91,10 +91,10 @@ def pick_threshold_max_precision_at_recall(y, p, recall_target=0.85):
 
 def main():
     ap=argparse.ArgumentParser()
-    ap.add_argument("--train_x",default="model_features_train.csv")
-    ap.add_argument("--train_y",default="model_labels_train.csv")
-    ap.add_argument("--test_x", default="model_features_test.csv")
-    ap.add_argument("--test_y", default="model_labels_test.csv")
+    ap.add_argument("--train_x",default="../../data/model_features_train.csv")
+    ap.add_argument("--train_y",default="../../data/model_labels_train.csv")
+    ap.add_argument("--test_x", default="../../data/model_features_test.csv")
+    ap.add_argument("--test_y", default="../../data/model_labels_test.csv")
     ap.add_argument("--epochs",type=int,default=150)
     ap.add_argument("--batch_size",type=int,default=512)
     ap.add_argument("--lr",type=float,default=3e-4)

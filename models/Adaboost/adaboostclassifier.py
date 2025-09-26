@@ -5,12 +5,12 @@ from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 import joblib
 
 # Load training data
-X_train = pd.read_csv("data/model_features_train.csv")
-y_train = pd.read_csv("data/model_labels_train.csv").values.ravel()  # flatten in case it's a dataframe
+X_train = pd.read_csv("../../data/model_features_train.csv")
+y_train = pd.read_csv("../../data/model_labels_train.csv").values.ravel()  # flatten in case it's a dataframe
 
 # Load testing data
-X_test = pd.read_csv("data/model_features_test.csv")
-y_test = pd.read_csv("data/model_labels_test.csv").values.ravel()
+X_test = pd.read_csv("../../data/model_features_test.csv")
+y_test = pd.read_csv("../../data/model_labels_test.csv").values.ravel()
 
 ada_param_grid = {
     "n_estimators": [100, 200, 500],
