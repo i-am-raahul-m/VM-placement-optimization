@@ -136,7 +136,7 @@ def load_models():
         models['GradBoost'] = None
     # SGD Classifier
     try:
-        models['SGD'] = joblib.load("sgd_classifier.pkl")
+        models['SGD'] = joblib.load("models/SGD/sgd_classifier.pkl")
     except Exception:
         models['SGD'] = None
     try:
