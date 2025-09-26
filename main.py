@@ -54,7 +54,7 @@ def load_models():
     try:
         import xgboost as xgb
         xb = xgb.Booster()
-        xb.load_model("xgboost_sla_model.json")
+        xb.load_model("models/XGBoost/xgboost_sla_model.json")
         models['XGBoost'] = xb
     except Exception:
         models['XGBoost'] = None
