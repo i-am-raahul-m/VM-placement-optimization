@@ -135,7 +135,7 @@ def prioritize_machines(
 
 
 if __name__ == '__main__':
-    machines_df = pd.read_csv("model_features_test.csv")
+    machines_df = pd.read_csv("data/model_features_test.csv")
 
     requested_vm = {
         "req_cpu_cores": 4,

@@ -6,7 +6,7 @@ import joblib
 # Load data
 X_train = pd.read_csv("model_features_train.csv")
 y_train = pd.read_csv("model_labels_train.csv").values.ravel()
-X_test = pd.read_csv("model_features_test.csv")
+X_test = pd.read_csv("data/model_features_test.csv")
 y_test = pd.read_csv("model_labels_test.csv").values.ravel()
 
 # Train
