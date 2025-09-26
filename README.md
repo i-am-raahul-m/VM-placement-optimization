@@ -98,17 +98,22 @@ The dashboard integrates and compares 10 models:
 
 ---
 
-## 📦 Installation
+## 📦 Installation and Execution
 
 ```bash
 # Clone repository
 git clone https://github.com/i-am-raahul-m/VM-placement-optimization.git
 cd VM-placement-optimization
 
-# Create virtual environment (recommended)
+# Create virtual environment
 python -m venv venv
 source venv/bin/activate   # Mac/Linux
 venv\Scripts\activate      # Windows
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Run the application
+streamlit run main.py
+```
+View the Application [here](http://localhost:8501/)
