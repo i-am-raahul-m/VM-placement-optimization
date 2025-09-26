@@ -11,9 +11,7 @@ y_train = pd.read_csv("model_labels_train.csv").values.ravel()  # flatten in cas
 # Load testing data
 X_test = pd.read_csv("model_features_test.csv")
 y_test = pd.read_csv("model_labels_test.csv").values.ravel()
-# -------------------------------
-# AdaBoost
-# -------------------------------
+
 ada_param_grid = {
     "n_estimators": [100, 200, 500],
     "learning_rate": [0.001, 0.01, 0.05, 0.1, 0.5, 1.0],

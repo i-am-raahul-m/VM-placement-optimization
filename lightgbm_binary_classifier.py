@@ -51,6 +51,3 @@ print("Classification Report:\n", classification_report(y_test, y_pred))
 
 # Save model
 model.save_model("lightgbm_sla_model.txt")
-
-# Load later if needed:
-# loaded_model = lgb.Booster(model_file="lightgbm_sla_model.txt")
